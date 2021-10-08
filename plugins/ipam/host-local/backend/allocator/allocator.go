@@ -77,9 +77,11 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 		// try to get allocated IPs for this given id, if exists, just return error
 		// because duplicate allocation is not allowed in SPEC
 		// https://github.com/containernetworking/cni/blob/master/SPEC.md
+		// 从/var/lib/cni/networks/{network name}查找包含内容container id + '\r\n' + ifname的文件列表
 		allocatedIPs := a.store.GetByID(id, ifname)
 		for _, allocatedIP := range allocatedIPs {
 			// check whether the existing IP belong to this range set
+			// err==nil说明发现的ip在这个rangeset里
 			if _, err := a.rangeset.RangeFor(allocatedIP); err == nil {
 				return nil, fmt.Errorf("%s has been allocated to %s, duplicate allocation is not allowed", allocatedIP.String(), id)
 			}
@@ -95,6 +97,9 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 				break
 			}
 
+			// 如果ip文件已经存在则reserved为false，err为nil，则继续循环
+			// 这样保证reservedIP一定是/var/lib/cni/networks/{network name}里不存在的
+			// 但是有可能所有的ip都已经存在了，即没有可用的reservedIP
 			reserved, err := a.store.Reserve(id, ifname, reservedIP.IP, a.rangeID)
 			if err != nil {
 				return nil, err
@@ -106,6 +111,9 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 		}
 	}
 
+	// 上面循环里一直执行Next()--每次返回的IP都在/var/lib/cni/networks/{network name}里--a.store.Reserve一直返回(false, nil)
+	// 直到iter.Next()返回reservedIP为nil，退出循环
+	// 即当iter.cur再次遍历到iter.startIP，iter.Next()返回(nil, nil)，说明已经转了一圈都没有找到未使用的ip
 	if reservedIP == nil {
 		return nil, fmt.Errorf("no IP addresses available in range set: %s", a.rangeset.String())
 	}
@@ -208,11 +216,17 @@ func (i *RangeIter) Next() (*net.IPNet, net.IP) {
 
 	if i.startIP == nil {
 		i.startIP = i.cur
+	// 如果一直执行Next()--每次返回的IP都在/var/lib/cni/networks/{network name}里--a.store.Reserve一直返回(false, nil)
+	// 则当i.cur再次遍历到i.startIP，直接返回，说明转了一圈都没有找到未使用的ip
 	} else if i.cur.Equal(i.startIP) {
 		// IF we've looped back to where we started, give up
 		return nil, nil
 	}
 
+	// 当i.cur重置为RangeStart
+	// ipv4的range里Gateway等于RangeStart，继续调用Next()
+	// 比如：lastReservedIP为RangeEnd且为第一次执行Next()且len(*i.rangeset)等于1，即初始i.cur为RangeEnd和i.startIP == nil
+	// 最后到这里i.cur为RangeStart和i.startIP为RangeStart
 	if i.cur.Equal(r.Gateway) {
 		return i.Next()
 	}

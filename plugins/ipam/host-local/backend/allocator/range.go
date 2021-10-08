@@ -41,6 +41,7 @@ func (r *Range) Canonicalize() error {
 	}
 
 	// Ensure Subnet IP is the network address, not some other address
+	// ip在mask里
 	networkIP := r.Subnet.IP.Mask(r.Subnet.Mask)
 	if !r.Subnet.IP.Equal(networkIP) {
 		return fmt.Errorf("Network has host bits set. For a subnet mask of length %d the network address is %s", ones, networkIP.String())
@@ -63,6 +64,7 @@ func (r *Range) Canonicalize() error {
 			return err
 		}
 
+		// r.RangeStart是否在r.subnet里，且r.RangeStart不能大于r.RangeEnd
 		if !r.Contains(r.RangeStart) {
 			return fmt.Errorf("RangeStart %s not in network %s", r.RangeStart.String(), (*net.IPNet)(&r.Subnet).String())
 		}
@@ -77,6 +79,7 @@ func (r *Range) Canonicalize() error {
 			return err
 		}
 
+		// r.RangeStart是否在r.subnet里，且r.RangeEnd不能小于r.RangeStart
 		if !r.Contains(r.RangeEnd) {
 			return fmt.Errorf("RangeEnd %s not in network %s", r.RangeEnd.String(), (*net.IPNet)(&r.Subnet).String())
 		}

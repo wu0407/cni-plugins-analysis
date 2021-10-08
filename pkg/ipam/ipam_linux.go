@@ -33,6 +33,7 @@ const (
 
 // ConfigureIface takes the result of IPAM plugin and
 // applies to the ifName interface
+// 配置网卡地址和路由
 func ConfigureIface(ifName string, res *current.Result) error {
 	if len(res.Interfaces) == 0 {
 		return fmt.Errorf("no interfaces to configure")
@@ -61,6 +62,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 
 		// Make sure sysctl "disable_ipv6" is 0 if we are about to add
 		// an IPv6 address to the interface
+		// "disable_ipv6"设置为0，才能设置网卡的ipv6地址
 		if !has_enabled_ipv6 && ipc.Address.IP.To4() == nil {
 			// Enabled IPv6 for loopback "lo" and the interface
 			// being configured

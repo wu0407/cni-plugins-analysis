@@ -80,6 +80,18 @@ func ParsePrevResult(conf *types.NetConf) error {
 	}
 
 	conf.RawPrevResult = nil
+	// 这里引用模块 types100 "github.com/containernetworking/cni/pkg/types/100"
+	// 在vendor\github.com\containernetworking\cni\pkg\types\100\types.go 里执行init()--"vendor\github.com\containernetworking\cni\pkg\types\internal\create.go"里的convert.RegisterCreator(supportedVersions, NewResult)
+	// 添加100版本的NewResult到("github.com/containernetworking/cni/pkg/types/internal")包里的全局变量creators
+	// 在"github.com/containernetworking/cni/pkg/types/100"包里又会引用 types040 "github.com/containernetworking/cni/pkg/types/040"
+	// "github.com/containernetworking/cni/pkg/types/040"包的init()也会调用convert.RegisterCreator(supportedVersions, NewResult)
+	// 添加040版本的NewResult到("github.com/containernetworking/cni/pkg/types/internal")包里的全局变量creators
+	// 在"github.com/containernetworking/cni/pkg/types/040"包里又会引用"github.com/containernetworking/cni/pkg/types/020"
+	// 在"github.com/containernetworking/cni/pkg/types/020"的init()也会调用convert.RegisterCreator(supportedVersions, NewResult)
+	// 添加020版本的NewResult到("github.com/containernetworking/cni/pkg/types/internal")包里的全局变量creators
+	// 
+	// 而这里的create.Create(conf.CNIVersion, resultBytes)会调用("github.com/containernetworking/cni/pkg/types/internal") convert.Create
+	// ("github.com/containernetworking/cni/pkg/types/internal") convert.Create会使用全局变量creators
 	conf.PrevResult, err = create.Create(conf.CNIVersion, resultBytes)
 	if err != nil {
 		return fmt.Errorf("could not parse prevResult: %w", err)

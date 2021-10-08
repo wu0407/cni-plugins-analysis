@@ -89,6 +89,8 @@ func init() {
 	runtime.LockOSThread()
 }
 
+// 从envArgs中MAC="xxxx"获得mac地址值, bytes解析成NetConf
+// mac值得优先级: bytes中的RuntimeConfig.Mac, bytes中args.Cni.Mac, envArgs中MAC
 func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	n := &NetConf{
 		BrName: defaultBrName,
@@ -151,6 +153,7 @@ func calcGateways(result *current.Result, n *NetConf) (*gwInfo, *gwInfo, error) 
 		defaultNet.Mask = net.IPMask(defaultNet.IP)
 
 		// All IPs currently refer to the container interface
+		// 这个index对应的是result.Interfaces里的index
 		ipc.Interface = current.Int(2)
 
 		// If not provided, calculate the gateway address corresponding
@@ -326,6 +329,10 @@ func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
 	return brGatewayVeth, nil
 }
 
+// netns为容器ns
+// 1. 在容器的ns里创建vethpair（包括容器里的veth和hostns里的veth），containerVeth进行up
+// 2. 在hostns中hostVeth进行up，设置/proc/sys/net/ipv6/conf/{hostVeth.Name}/accept_ra为0，不接受路由广播
+// 3. 在hostns里hostVeth桥接上br，设置hairpinMode，设置vlan id
 func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, vlanID int, mac string) (*current.Interface, *current.Interface, error) {
 	contIface := &current.Interface{}
 	hostIface := &current.Interface{}
@@ -434,6 +441,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("cannot set hairpin mode and promiscuous mode at the same time.")
 	}
 
+	// 如果已经存在bridge，则不创建
 	br, brInterface, err := setupBridge(n)
 	if err != nil {
 		return err
@@ -445,6 +453,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
+	// 1. 在容器的ns里创建vethpair（包括容器里的veth和hostns里的veth），containerVeth进行up
+	// 2. 在hostns中hostVeth进行up，设置/proc/sys/net/ipv6/conf/{hostVeth.Name}/accept_ra为0，不接受路由广播
+	// 3. 在hostns里hostVeth桥接上br，设置hairpinMode，设置vlan id
 	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.mac)
 	if err != nil {
 		return err
@@ -460,6 +471,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		},
 	}
 
+	// 分配ip地址和设置网卡ip
 	if isLayer3 {
 		// run the IPAM plugin and get back the config to apply
 		r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
@@ -499,6 +511,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// bridge. Hairpin mode causes echos of neighbor solicitation
 			// packets, which causes DAD failures.
 			for _, ipc := range result.IPs {
+				// 如果是ipv6地址
 				if ipc.Address.IP.To4() == nil && (n.HairpinMode || n.PromiscMode) {
 					if err := disableIPV6DAD(args.IfName); err != nil {
 						return err
@@ -508,6 +521,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 
 			// Add the IP to the interface
+			// 配置容器网卡地址和路由
 			if err := ipam.ConfigureIface(args.IfName, result); err != nil {
 				return err
 			}
@@ -561,6 +575,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 						firstV4Addr = gw.IP
 					}
 					if n.Vlan != 0 {
+						// host中创建vlan网卡（网卡名为{br.name}.{vlan id}）和对端的veth网卡
+						// 对端的veth网卡连上br
 						vlanIface, err := ensureVlanInterface(br, n.Vlan)
 						if err != nil {
 							return fmt.Errorf("failed to create vlan interface: %v", err)
@@ -572,6 +588,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 							result.Interfaces = append(result.Interfaces, vlanInterface)
 						}
 
+						// vlan网卡配置ip地址和重新配置mac地址
 						err = ensureAddr(vlanIface, gws.family, &gw, n.ForceAddress)
 						if err != nil {
 							return fmt.Errorf("failed to set vlan interface for bridge with addr: %v", err)
@@ -585,6 +602,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				}
 
 				if gws.gws != nil {
+					// 启用/proc/sys/net/ipv4/ip_forward或/proc/sys/net/ipv6/conf/all/forwarding
 					if err = enableIPForward(gws.family); err != nil {
 						return fmt.Errorf("failed to enable forwarding: %v", err)
 					}

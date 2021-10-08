@@ -122,6 +122,9 @@ func (t *dispatcher) getCmdArgsFromEnv() (string, *CmdArgs, *types.Error) {
 	for _, v := range vars {
 		*v.val = t.Getenv(v.name)
 		if *v.val == "" {
+			// 首先cmd为环境变量CNI_COMMAND的值（可以是"ADD"，"CHECK"，"DEL"）
+			//  v.reqForCmd[cmd]为true代表环境变量v.name需要设置值
+			// 还有一种情况是环境变量CNI_COMMAND没有值
 			if v.reqForCmd[cmd] || v.name == "CNI_COMMAND" {
 				argsMissing = append(argsMissing, v.name)
 			}
@@ -154,10 +157,12 @@ func (t *dispatcher) getCmdArgsFromEnv() (string, *CmdArgs, *types.Error) {
 }
 
 func (t *dispatcher) checkVersionAndCall(cmdArgs *CmdArgs, pluginVersionInfo version.PluginInfo, toCall func(*CmdArgs) error) *types.Error {
+	// 获得Stdindata中的CNIVersion
 	configVersion, err := t.ConfVersionDecoder.Decode(cmdArgs.StdinData)
 	if err != nil {
 		return types.NewError(types.ErrDecodingFailure, err.Error(), "")
 	}
+	// configVersion是否在支持的版本中--pluginVersionInfo.SupportedVersions_
 	verErr := t.VersionReconciler.Check(configVersion, pluginVersionInfo)
 	if verErr != nil {
 		return types.NewError(types.ErrIncompatibleCNIVersion, "incompatible CNI versions", verErr.Details())
@@ -184,6 +189,7 @@ func validateConfig(jsonBytes []byte) *types.Error {
 	if conf.Name == "" {
 		return types.NewError(types.ErrInvalidNetworkConfig, "missing network name", "")
 	}
+	// 验证name是否为空和name是否匹配"^[a-zA-Z0-9][a-zA-Z0-9_.\-]*$"
 	if err := utils.ValidateNetworkName(conf.Name); err != nil {
 		return err
 	}
@@ -191,6 +197,7 @@ func validateConfig(jsonBytes []byte) *types.Error {
 }
 
 func (t *dispatcher) pluginMain(cmdAdd, cmdCheck, cmdDel func(_ *CmdArgs) error, versionInfo version.PluginInfo, about string) *types.Error {
+	// 获得环境变量CNI_COMMAND的值
 	cmd, cmdArgs, err := t.getCmdArgsFromEnv()
 	if err != nil {
 		// Print the about string to stderr when no command is set
@@ -202,12 +209,18 @@ func (t *dispatcher) pluginMain(cmdAdd, cmdCheck, cmdDel func(_ *CmdArgs) error,
 	}
 
 	if cmd != "VERSION" {
+		// 验证StdinData里是否有name字段，且name字段符合标准格式
 		if err = validateConfig(cmdArgs.StdinData); err != nil {
 			return err
 		}
+		// 验证ContainerID是否不为空，且ContainerID符合标准格式
 		if err = utils.ValidateContainerID(cmdArgs.ContainerID); err != nil {
 			return err
 		}
+		// 1. The name must not be empty
+		// 2. The name must be less than 16 characters
+		// 3. The name must not be "." or ".."
+		// 3. The name must not contain / or : or any whitespace characters
 		if err = utils.ValidateInterfaceName(cmdArgs.IfName); err != nil {
 			return err
 		}

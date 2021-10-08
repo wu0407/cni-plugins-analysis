@@ -38,9 +38,11 @@ func parseNetConf(bytes []byte) (*types.NetConf, error) {
 	}
 
 	if conf.RawPrevResult != nil {
+		// 将conf.RawPrevResult解析出的结果赋值给conf.PrevResult，conf.RawPrevResult置为nil
 		if err := version.ParsePrevResult(conf); err != nil {
 			return nil, fmt.Errorf("failed to parse prevResult: %v", err)
 		}
+		// 测试conf.PrevResult能否转成current 100版本
 		if _, err := current.NewResultFromResult(conf.PrevResult); err != nil {
 			return nil, fmt.Errorf("failed to convert result to current version: %v", err)
 		}
@@ -49,6 +51,7 @@ func parseNetConf(bytes []byte) (*types.NetConf, error) {
 	return conf, nil
 }
 
+// 对lo网卡进行link up和检查绑的addr是不是loopback ip
 func cmdAdd(args *skel.CmdArgs) error {
 	conf, err := parseNetConf(args.StdinData)
 	if err != nil {
@@ -58,6 +61,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	var v4Addr, v6Addr *net.IPNet
 
 	args.IfName = "lo" // ignore config, this only works for loopback
+	// 这里传入的是hostNS，没有用到
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		link, err := netlink.LinkByName(args.IfName)
 		if err != nil {

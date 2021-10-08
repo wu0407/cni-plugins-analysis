@@ -39,6 +39,7 @@ func delegateCommon(delegatePlugin string, exec Exec) (string, Exec, error) {
 // DelegateAdd calls the given delegate plugin with the CNI ADD action and
 // JSON configuration
 func DelegateAdd(ctx context.Context, delegatePlugin string, netconf []byte, exec Exec) (types.Result, error) {
+	// 查找插件的路径和执行器exec
 	pluginPath, realExec, err := delegateCommon(delegatePlugin, exec)
 	if err != nil {
 		return nil, err

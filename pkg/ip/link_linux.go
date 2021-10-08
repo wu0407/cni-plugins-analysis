@@ -87,9 +87,11 @@ func makeVeth(name, vethPeerName string, mtu int, mac string, hostNS ns.NetNS) (
 			return
 
 		case os.IsExist(err):
+			// 已经存在且vethPeerName为空，说明VethPair名字冲突了，进行重试--重新生成VethPair名字
 			if peerExists(peerName) && vethPeerName == "" {
 				continue
 			}
+			// 提供的vethPeerName已经存在了
 			err = fmt.Errorf("container veth name provided (%v) already exists", name)
 			return
 

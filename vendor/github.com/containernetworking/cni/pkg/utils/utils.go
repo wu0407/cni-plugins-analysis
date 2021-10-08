@@ -40,6 +40,7 @@ func ValidateContainerID(containerID string) *types.Error {
 	if containerID == "" {
 		return types.NewError(types.ErrUnknownContainer, "missing containerID", "")
 	}
+	// containerID是否匹配"^[a-zA-Z0-9][a-zA-Z0-9_.\-]*$"
 	if !cniReg.MatchString(containerID) {
 		return types.NewError(types.ErrInvalidEnvironmentVariables, "invalid characters in containerID", containerID)
 	}
@@ -52,6 +53,7 @@ func ValidateNetworkName(networkName string) *types.Error {
 	if networkName == "" {
 		return types.NewError(types.ErrInvalidNetworkConfig, "missing network name:", "")
 	}
+	// name是否匹配"^[a-zA-Z0-9][a-zA-Z0-9_.\-]*$"
 	if !cniReg.MatchString(networkName) {
 		return types.NewError(types.ErrInvalidNetworkConfig, "invalid characters found in network name", networkName)
 	}

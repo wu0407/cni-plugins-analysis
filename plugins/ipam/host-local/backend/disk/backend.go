@@ -56,6 +56,8 @@ func New(network, dataDir string) (*Store, error) {
 	return &Store{lk, dir}, nil
 }
 
+// 默认在/var/lib/cni/networks/{network name}/{ip}写入container id + '\r\n' + ifname
+// 默认在/var/lib/cni/networks/{network name}/{"last_reserved_ip." + rangeID}写入ip
 func (s *Store) Reserve(id string, ifname string, ip net.IP, rangeID string) (bool, error) {
 	fname := GetEscapedPath(s.dataDir, ip.String())
 

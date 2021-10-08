@@ -86,17 +86,23 @@ func LoadArgs(args string, container interface{}) error {
 		}
 		keyString := kv[0]
 		valueString := kv[1]
+		// 发现containerValue中是否有keyString字段，It returns the zero Value if no field was found.
 		keyField := GetKeyField(keyString, containerValue)
+		// 如果有这个字段则返回true，没有这个字段则返回false
 		if !keyField.IsValid() {
 			unknownArgs = append(unknownArgs, pair)
 			continue
 		}
 
+		// keyField的真实值
 		var keyFieldInterface interface{}
 		switch {
 		case keyField.Kind() == reflect.Ptr:
+			// 为keyField设置一个零值
 			keyField.Set(reflect.New(keyField.Type().Elem()))
+			// 获得keyField真实值
 			keyFieldInterface = keyField.Interface()
+		//  keyField.CanAddr()--判断字段的值是其实是一个地址，keyField.Addr()获得指向的真实值地址
 		case keyField.CanAddr() && keyField.Addr().CanInterface():
 			keyFieldInterface = keyField.Addr().Interface()
 		default:
@@ -108,6 +114,7 @@ func LoadArgs(args string, container interface{}) error {
 				"ARGS: cannot unmarshal into field '%s' - type '%s' does not implement encoding.TextUnmarshaler",
 				keyString, reflect.TypeOf(keyFieldInterface))}
 		}
+		// valueString赋值给u
 		err := u.UnmarshalText([]byte(valueString))
 		if err != nil {
 			return fmt.Errorf("ARGS: error parsing value of pair %q: %w", pair, err)

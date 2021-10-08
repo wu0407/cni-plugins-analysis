@@ -112,6 +112,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	}
 
 	for idx := range n.IPAM.IPArgs {
+		// 验证ip是否合法
 		if err := canonicalizeIP(&n.IPAM.IPArgs[idx]); err != nil {
 			return nil, "", fmt.Errorf("cannot understand ip: %v", err)
 		}
@@ -137,6 +138,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	numV4 := 0
 	numV6 := 0
 	for i := range n.IPAM.Ranges {
+		// 验证各个range是否合法（各个字段是否是合法，filling out Start, End, and Gateway with sane values if missing，验证Start, End，Gateway是否是合法的，且start小于end，Gateway在这个范围内）
 		if err := n.IPAM.Ranges[i].Canonicalize(); err != nil {
 			return nil, "", fmt.Errorf("invalid range set %d: %s", i, err)
 		}
