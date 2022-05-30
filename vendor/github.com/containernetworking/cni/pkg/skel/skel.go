@@ -122,9 +122,13 @@ func (t *dispatcher) getCmdArgsFromEnv() (string, *CmdArgs, *types.Error) {
 	for _, v := range vars {
 		*v.val = t.Getenv(v.name)
 		if *v.val == "" {
-			// 首先cmd为环境变量CNI_COMMAND的值（可以是"ADD"，"CHECK"，"DEL"）
+			// 首先cmd的值为环境变量CNI_COMMAND的值（可以是"ADD"，"CHECK"，"DEL"）
 			//  v.reqForCmd[cmd]为true代表环境变量v.name需要设置值
 			// 还有一种情况是环境变量CNI_COMMAND没有值
+			// 下面条件成立（或关系）
+			// 1. 当cmd的值不为空，且为"ADD"，"CHECK"，"DEL"其中之一，v.reqForCmd[cmd]是true，说明是CNI_COMMAND之外的环境变量没有
+			// 2. 当cmd的值不为空，且不为"ADD"，"CHECK"，"DEL"其中之一，v.reqForCmd[cmd]一定为false，说明CNI_COMMAND环境变量值不对
+			// 3. 当cmd的值为空，v.reqForCmd[cmd]一定为false，说明是CNI_COMMAND环境变量没有
 			if v.reqForCmd[cmd] || v.name == "CNI_COMMAND" {
 				argsMissing = append(argsMissing, v.name)
 			}
@@ -197,7 +201,7 @@ func validateConfig(jsonBytes []byte) *types.Error {
 }
 
 func (t *dispatcher) pluginMain(cmdAdd, cmdCheck, cmdDel func(_ *CmdArgs) error, versionInfo version.PluginInfo, about string) *types.Error {
-	// 获得环境变量CNI_COMMAND的值
+	// 获得各个环境变量CNI_COMMAND、CNI_CONTAINERID、CNI_NETNS、CNI_IFNAME、CNI_ARGS、CNI_PATH的值
 	cmd, cmdArgs, err := t.getCmdArgsFromEnv()
 	if err != nil {
 		// Print the about string to stderr when no command is set
