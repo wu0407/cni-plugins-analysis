@@ -726,6 +726,10 @@ func validateInterface(intf current.Interface, expectInSb bool) (cniBridgeIf, ne
 	return ifFound, link, err
 }
 
+// 根据bridge的interface，验证通过bridge的name找到link
+// 1. 是否是bridge类型
+// 2. mac是否匹配
+// 3. Promisc属性是否一致
 func validateCniBrInterface(intf current.Interface, n *NetConf) (cniBridgeIf, error) {
 
 	brFound, link, err := validateInterface(intf, false)
@@ -758,6 +762,10 @@ func validateCniBrInterface(intf current.Interface, n *NetConf) (cniBridgeIf, er
 	return brFound, nil
 }
 
+// 根据容器对端网卡的interface，验证通过容器对端网卡的name找到link
+// 1. 能否获取对端网卡
+// 2. 验证对端网卡是否是容器网卡
+// 3. 容器对端网卡的master是否是bridge网卡
 func validateCniVethInterface(intf *current.Interface, brIf cniBridgeIf, contIf cniBridgeIf) (cniBridgeIf, error) {
 
 	vethFound, link, err := validateInterface(*intf, false)
@@ -802,6 +810,10 @@ func validateCniVethInterface(intf *current.Interface, brIf cniBridgeIf, contIf 
 	return vethFound, nil
 }
 
+// 根据容器网卡的interface，验证通过容器网卡的name找到link
+// 1. 是否是veth类型
+// 2. 能否获得对端网卡的index
+// 3. mac是否一致
 func validateCniContainerInterface(intf current.Interface) (cniBridgeIf, error) {
 
 	vethFound, link, err := validateInterface(intf, true)
@@ -813,6 +825,7 @@ func validateCniContainerInterface(intf current.Interface) (cniBridgeIf, error) 
 	if !isVeth {
 		return vethFound, fmt.Errorf("Error: Container interface %s not of type veth", link.Attrs().Name)
 	}
+	// 找到对端网卡的index
 	_, vethFound.peerIndex, err = ip.GetVethPeerIfindex(link.Attrs().Name)
 	if err != nil {
 		return vethFound, fmt.Errorf("Unable to obtain veth peer index for veth %s", link.Attrs().Name)
@@ -854,10 +867,12 @@ func cmdCheck(args *skel.CmdArgs) error {
 		return fmt.Errorf("Required prevResult missing")
 	}
 
+	// 将n.NetConf.RawPrevResult转成n.NetConf.CNIVersion版本的result，并设置到n.NetConf.PrevResult字段中，且将n.NetConf.RawPrevResult设置成nil
 	if err := version.ParsePrevResult(&n.NetConf); err != nil {
 		return err
 	}
 
+	// 将n.PrevResult转成current版本（100版本）
 	result, err := current.NewResultFromResult(n.PrevResult)
 	if err != nil {
 		return err
@@ -880,6 +895,10 @@ func cmdCheck(args *skel.CmdArgs) error {
 		}
 	}
 
+	// 根据bridge的interface，验证通过bridge的name找到link
+	// 1. 是否是bridge类型
+	// 2. mac是否匹配
+	// 3. Promisc属性是否一致
 	brCNI, err := validateCniBrInterface(brMap, n)
 	if err != nil {
 		return err
@@ -893,6 +912,10 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	// Check interface against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
+		// 根据容器网卡的interface，验证通过容器网卡的name找到link
+		// 1. 是否是veth类型
+		// 2. 嫩否获得对端网卡的index
+		// 3. mac是否一致
 		contCNI, errLink = validateCniContainerInterface(contMap)
 		if errLink != nil {
 			return errLink
@@ -917,6 +940,11 @@ func cmdCheck(args *skel.CmdArgs) error {
 			continue
 		}
 
+		// 验证容器的对端网卡
+		// 根据容器对端网卡的interface，验证通过容器对端网卡的name找到link
+		// 1. 能否获取对端网卡
+		// 2. 验证对端网卡是否是容器网卡
+		// 3. 容器对端网卡的master是否是bridge网卡
 		vethCNI, errLink = validateCniVethInterface(intf, brCNI, contCNI)
 		if errLink != nil {
 			return errLink
@@ -940,11 +968,13 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
+		// 验证网卡的ip，ip网段是否有网关路由
 		err = ip.ValidateExpectedInterfaceIPs(args.IfName, result.IPs)
 		if err != nil {
 			return err
 		}
 
+		// 验证是否有期望的路由
 		err = ip.ValidateExpectedRoute(result.Routes)
 		if err != nil {
 			return err

@@ -25,6 +25,7 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
+// 验证网卡的ip，ip网段是否有网关路由
 func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) error {
 
 	// Ensure ips
@@ -75,6 +76,7 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 	return nil
 }
 
+// 验证是否有期望的路由
 func ValidateExpectedRoute(resultRoutes []*types.Route) error {
 
 	// Ensure that each static route in prevResults is found in the routing table
